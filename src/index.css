@@ -343,3 +343,24 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .fill-card, .calculation-card, .insight-note { max-width: none; }
   .experiment-strip { padding: 9px; }
 }
+
+/* Single-purpose unit-cube builder layout */
+.fill-workspace { grid-template-columns: minmax(0, 1fr) 336px; }
+.sidebar-right { min-width: 0; }
+.fill-workspace .simulation-column { min-height: 0; }
+.fill-workspace .canvas-card { min-height: 0; }
+.fill-workspace .viewport-wrap { min-height: 300px; }
+
+@media (max-width: 1120px) {
+  .fill-workspace { grid-template-columns: minmax(0, 1fr) 310px; }
+}
+@media (max-width: 900px) {
+  .fill-workspace { grid-template-columns: minmax(0, 1fr); }
+  .fill-workspace .simulation-column { min-height: 630px; }
+  .fill-workspace .canvas-card { min-height: 590px; }
+}
+@media (max-width: 600px) {
+  .fill-workspace .simulation-column { min-height: 0; }
+  .fill-workspace .canvas-card { min-height: 0; }
+  .fill-workspace .viewport-wrap { min-height: 340px; }
+}
