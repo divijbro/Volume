@@ -63,14 +63,16 @@ function SolidShape({ shape, dimensions, fill, showUnitCubes, cubeCount, cylinde
   const outline = '#6485ad'
 
   if (shape === 'cylinder') {
+    const unitFill = fill && showUnitCubes
     return (
       <group>
         <mesh position={[0, centerY, 0]} castShadow receiveShadow>
           <cylinderGeometry args={[radius, radius, height, 64, 1]} />
-          <meshStandardMaterial color="#8eb6f5" roughness={0.56} metalness={0.02} transparent={cylinderApproximation} opacity={cylinderApproximation ? 0.3 : 1} />
+          <meshStandardMaterial color="#8eb6f5" roughness={0.56} metalness={0.02} transparent={unitFill || cylinderApproximation} opacity={unitFill ? 0.07 : cylinderApproximation ? 0.3 : 1} depthWrite={!unitFill} />
           <Edges color={outline} threshold={18} />
         </mesh>
-        {cylinderApproximation && <CylinderGrid radius={radius} y={height + 0.018} unitScale={unitScale} />}
+        {unitFill && <UnitCylinderLayers radius={radius} height={height} unitScale={unitScale} />}
+        {cylinderApproximation && !unitFill && <CylinderGrid radius={radius} y={height + 0.018} unitScale={unitScale} />}
         <Measure start={[radius + 0.45, 0, 0]} end={[radius + 0.45, height, 0]} label={`${formatNumber(height / unitScale)} ${unit}`} />
         <Measure start={[0, 0.04, 0]} end={[radius, 0.04, 0]} label={`r = ${formatNumber(radius / unitScale)} ${unit}`} color="#c5813e" />
       </group>
@@ -105,7 +107,7 @@ function UnitCubeGrid({ dimensions, cubeCount, unitScale }: { dimensions: [numbe
   const nz = Math.floor(width / unitScale + 1e-8)
   const ny = Math.floor(height / unitScale + 1e-8)
   const layerSize = nx * nz
-  const capacity = nx * nz * Math.max(ny, previousLayers.current ?? ny)
+  const capacity = nx * nz * 10
   const matrix = useMemo(() => new THREE.Matrix4(), [])
   const position = useMemo(() => new THREE.Vector3(), [])
   const scale = useMemo(() => new THREE.Vector3(), [])
@@ -215,6 +217,106 @@ function UnitCubeGrid({ dimensions, cubeCount, unitScale }: { dimensions: [numbe
       <boxGeometry args={[unitScale * 0.91, unitScale * 0.91, unitScale * 0.91]} />
       <meshStandardMaterial color="#5f98ef" roughness={0.48} />
   </instancedMesh>
+}
+
+function UnitCylinderLayers({ radius, height, unitScale }: { radius: number; height: number; unitScale: number }) {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  const previousLayers = useRef<number | null>(null)
+  const previousRadius = useRef<number | null>(null)
+  const animation = useRef<{ startLayer: number; endLayer: number; adding: boolean; finalCount: number; startTime: number | null; step: number } | null>(null)
+  const layerCount = Math.floor(height / unitScale + 1e-8)
+  const capacity = 10
+  const matrix = useMemo(() => new THREE.Matrix4(), [])
+  const position = useMemo(() => new THREE.Vector3(), [])
+  const scale = useMemo(() => new THREE.Vector3(), [])
+  const quaternion = useMemo(() => new THREE.Quaternion(), [])
+
+  function setLayerMatrix(index: number, heightScale = 1, yOffset = 0) {
+    if (!ref.current) return
+    position.set(0, index * unitScale + unitScale / 2 + yOffset, 0)
+    scale.set(1, heightScale, 1)
+    matrix.compose(position, quaternion, scale)
+    ref.current.setMatrixAt(index, matrix)
+  }
+
+  useLayoutEffect(() => {
+    const mesh = ref.current
+    if (!mesh) return
+    const oldLayerCount = previousLayers.current
+    const footprintChanged = previousRadius.current !== radius
+    const targetCount = Math.max(0, Math.min(capacity, layerCount))
+    const adding = oldLayerCount !== null && targetCount > oldLayerCount
+
+    if (footprintChanged || oldLayerCount === null) {
+      for (let index = 0; index < targetCount; index += 1) setLayerMatrix(index)
+      mesh.count = targetCount
+      animation.current = null
+    } else if (targetCount !== oldLayerCount) {
+      const startLayer = Math.min(oldLayerCount, targetCount)
+      const endLayer = Math.max(oldLayerCount, targetCount)
+      const startIndex = startLayer
+      const endIndex = endLayer
+      for (let index = 0; index < startIndex; index += 1) setLayerMatrix(index)
+      if (adding) {
+        for (let index = startIndex; index < endIndex; index += 1) setLayerMatrix(index, 0.16, unitScale * 0.85)
+      } else {
+        for (let index = startIndex; index < endIndex; index += 1) setLayerMatrix(index)
+      }
+      animation.current = { startLayer, endLayer, adding, finalCount: targetCount, startTime: null, step: 0 }
+      mesh.count = adding ? targetCount : oldLayerCount
+    } else {
+      mesh.count = targetCount
+      animation.current = null
+    }
+    previousLayers.current = layerCount
+    previousRadius.current = radius
+    mesh.instanceMatrix.needsUpdate = true
+  }, [height, layerCount, radius, unitScale])
+
+  useFrame(({ clock }) => {
+    const active = animation.current
+    const mesh = ref.current
+    if (!active || !mesh) return
+    if (active.startTime === null) active.startTime = clock.elapsedTime
+    const durationPerLayer = 0.36
+    const elapsed = Math.max(0, clock.elapsedTime - active.startTime)
+    const layerTotal = active.endLayer - active.startLayer
+    const step = Math.min(layerTotal, Math.floor(elapsed / durationPerLayer))
+    if (step > active.step) {
+      for (let finishedStep = active.step; finishedStep < step; finishedStep += 1) {
+        const finishedLayer = active.adding
+          ? active.startLayer + finishedStep
+          : active.endLayer - 1 - finishedStep
+        if (active.adding) setLayerMatrix(finishedLayer)
+        else setLayerMatrix(finishedLayer, 0.01, unitScale * 0.65)
+      }
+      active.step = step
+    }
+    if (step >= layerTotal) {
+      if (active.adding) {
+        for (let index = active.startLayer; index < active.endLayer; index += 1) setLayerMatrix(index)
+      }
+      mesh.count = active.finalCount
+      mesh.instanceMatrix.needsUpdate = true
+      animation.current = null
+      return
+    }
+    const t = Math.min(1, Math.max(0, (elapsed - step * durationPerLayer) / durationPerLayer))
+    const eased = 1 - (1 - t) ** 3
+    const currentLayer = active.adding
+      ? active.startLayer + step
+      : active.endLayer - 1 - step
+    if (active.adding) setLayerMatrix(currentLayer, 0.16 + 0.84 * eased, unitScale * 0.85 * (1 - eased))
+    else setLayerMatrix(currentLayer, Math.max(0.01, 1 - eased), unitScale * 0.65 * eased)
+    mesh.instanceMatrix.needsUpdate = true
+  })
+
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, Math.max(1, capacity)]} castShadow receiveShadow frustumCulled={false}>
+      <cylinderGeometry args={[radius, radius, unitScale * 0.91, 48, 1]} />
+      <meshStandardMaterial color="#5f98ef" roughness={0.48} metalness={0.015} />
+    </instancedMesh>
+  )
 }
 
 function CylinderGrid({ radius, y, unitScale }: { radius: number; y: number; unitScale: number }) {

@@ -350,6 +350,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .fill-workspace .simulation-column { min-height: 0; }
 .fill-workspace .canvas-card { min-height: 0; }
 .fill-workspace .viewport-wrap { min-height: 300px; }
+.shape-switch { display: flex; width: max-content; gap: 3px; margin-bottom: 13px; padding: 3px; border: 1px solid #e6ebf1; border-radius: 8px; background: #f3f5f8; }
+.shape-switch button { min-width: 82px; padding: 6px 11px; border: 0; border-radius: 6px; background: transparent; color: #77869a; cursor: pointer; font-size: 10px; font-weight: 700; transition: .16s ease; }
+.shape-switch button:hover { color: #4779cc; }
+.shape-switch button.selected { background: #fff; color: #396fca; box-shadow: 0 1px 3px #172c461a; }
+.cylinder-slider-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 650px; }
 
 @media (max-width: 1120px) {
   .fill-workspace { grid-template-columns: minmax(0, 1fr) 310px; }
@@ -363,4 +368,5 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .fill-workspace .simulation-column { min-height: 0; }
   .fill-workspace .canvas-card { min-height: 0; }
   .fill-workspace .viewport-wrap { min-height: 340px; }
+  .fill-workspace .cylinder-slider-grid { grid-template-columns: minmax(0, 1fr); }
 }
